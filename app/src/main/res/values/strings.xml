@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LAB6 Mundial</string>
+    <string name="mis_pronosticos">Mis Pronósticos</string>
+    <string name="estadisticas">Estadísticas</string>
+    <string name="cerrar_sesion">Cerrar Sesión</string>
+    <string name="registrar_pronostico">Registrar Pronóstico</string>
+    <string name="editar_pronostico">Editar Pronóstico</string>
+    <string name="eliminar_pronostico">Eliminar Pronóstico</string>
+    <string name="sin_pronosticos">Aún no hay pronósticos registrados.</string>
+    <string name="seleccion_a">Selección A</string>
+    <string name="seleccion_b">Selección B</string>
+    <string name="fecha_partido">Fecha del partido</string>
+    <string name="goles_a">Goles A</string>
+    <string name="goles_b">Goles B</string>
+    <string name="estado">Estado</string>
+    <string name="guardar">Guardar</string>
+    <string name="cancelar">Cancelar</string>
+    <string name="editar">Editar</string>
+    <string name="eliminar">Eliminar</string>
+    <string name="confirmar_eliminacion">¿Deseas eliminar este pronóstico?</string>
+    <string name="total_pronosticos">Total de pronósticos</string>
+    <string name="acertados">Pronósticos acertados</string>
+    <string name="fallados">Pronósticos fallados</string>
+    <string name="pendientes">Pronósticos pendientes</string>
+    <string name="login_email">Ingresar con correo</string>
+    <string name="login_google">Ingresar con Google</string>
+    <string name="login_github">Ingresar con GitHub</string>
+    <string name="login_cancelado">Inicio de sesión cancelado.</string>
+    <string name="logout_exitoso">Sesión cerrada correctamente.</string>
+    <string name="pronostico_registrado">Pronóstico registrado correctamente.</string>
+    <string name="pronostico_actualizado">Pronóstico actualizado correctamente.</string>
+    <string name="pronostico_eliminado">Pronóstico eliminado correctamente.</string>
+    <string name="pronostico_bloqueado">Solo se pueden modificar pronósticos pendientes.</string>
+    <string name="validacion_campos">Completa todos los campos.</string>
+    <string name="validacion_selecciones">Las selecciones no pueden ser iguales.</string>
+    <string name="validacion_goles">Los goles deben ser enteros no negativos.</string>
+    <string name="error_guardar">No se pudo guardar el pronóstico.</string>
+    <string name="error_eliminar">No se pudo eliminar el pronóstico.</string>
+    <string name="error_cargar_pronosticos">No se pudieron cargar los pronósticos.</string>
+    <string name="firebase_no_configurado_titulo">Firebase no configurado</string>
+    <string name="firebase_no_configurado_mensaje">La app no puede iniciar sesión todavía porque falta app/google-services.json. Descárgalo desde Firebase Console usando el package edu.pucp.lab6, colócalo en app/ y vuelve a compilar.</string>
+    <string name="google_no_configurado">Google Sign-In aún no está configurado en Firebase. Puedes usar correo o GitHub por ahora.</string>
+</resources>
