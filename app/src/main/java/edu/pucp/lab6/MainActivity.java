@@ -88,6 +88,7 @@ public class MainActivity extends AppCompatActivity {
 
         binding.recyclerPronosticos.setLayoutManager(new LinearLayoutManager(this));
         binding.recyclerPronosticos.setAdapter(adapter);
+        binding.buttonNuevoPronostico.setEnabled(false);
         binding.buttonNuevoPronostico.setOnClickListener(view -> mostrarDialogoPronostico(null));
         binding.bottomNavigation.setOnItemSelectedListener(item -> {
             if (item.getItemId() == R.id.navigation_pronosticos) {
@@ -156,6 +157,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void iniciarLogin() {
+        binding.buttonNuevoPronostico.setEnabled(false);
         boolean googleConfigurado = googleSignInEstaConfigurado();
         int layoutLogin = googleConfigurado
                 ? R.layout.auth_method_picker
@@ -208,19 +210,24 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void onSignInResult(FirebaseAuthUIAuthenticationResult result) {
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+        if (user != null) {
+            configurarSesionActiva(user);
+            return;
+        }
+
         if (result.getResultCode() == RESULT_OK) {
-            FirebaseUser user = firebaseAuth.getCurrentUser();
-            if (user != null) {
-                configurarSesionActiva(user);
-            }
+            iniciarLogin();
         } else {
             Toast.makeText(this, R.string.login_cancelado, Toast.LENGTH_SHORT).show();
+            iniciarLogin();
         }
     }
 
     private void configurarSesionActiva(@NonNull FirebaseUser user) {
         String correo = user.getEmail() == null ? user.getUid() : user.getEmail();
         binding.textUsuario.setText(correo);
+        binding.buttonNuevoPronostico.setEnabled(true);
         guardarUsuarioSiEsNecesario(user);
         mostrarPronosticos();
         escucharPronosticos();
@@ -262,14 +269,46 @@ public class MainActivity extends AppCompatActivity {
                     }
                     List<PronosticoDto> pronosticos = new java.util.ArrayList<>();
                     for (QueryDocumentSnapshot doc : snapshot) {
-                        PronosticoDto pronostico = doc.toObject(PronosticoDto.class);
-                        pronostico.setId(doc.getId());
-                        pronosticos.add(pronostico);
+                        try {
+                            pronosticos.add(crearPronosticoDesdeDocumento(doc));
+                        } catch (RuntimeException e) {
+                            Toast.makeText(this, R.string.error_cargar_pronosticos, Toast.LENGTH_SHORT).show();
+                        }
                     }
                     adapter.submitList(pronosticos);
                     actualizarEstadisticas(pronosticos);
                     binding.textEstadoVacio.setVisibility(pronosticos.isEmpty() ? View.VISIBLE : View.GONE);
                 });
+    }
+
+    private PronosticoDto crearPronosticoDesdeDocumento(QueryDocumentSnapshot doc) {
+        PronosticoDto pronostico = new PronosticoDto(
+                textoDocumento(doc, "seleccionA"),
+                textoDocumento(doc, "seleccionB"),
+                doc.getDate("fechaPartido"),
+                enteroDocumento(doc, "golesA"),
+                enteroDocumento(doc, "golesB"),
+                estadoDocumento(doc)
+        );
+        pronostico.setId(doc.getId());
+        return pronostico;
+    }
+
+    private String textoDocumento(QueryDocumentSnapshot doc, String campo) {
+        String valor = doc.getString(campo);
+        return valor == null ? "" : valor;
+    }
+
+    private int enteroDocumento(QueryDocumentSnapshot doc, String campo) {
+        Long valor = doc.getLong(campo);
+        return valor == null ? 0 : valor.intValue();
+    }
+
+    private String estadoDocumento(QueryDocumentSnapshot doc) {
+        String estado = doc.getString("estado");
+        return estado == null || estado.trim().isEmpty()
+                ? PronosticoDto.ESTADO_PENDIENTE
+                : estado;
     }
 
     private void mostrarPronosticos() {
@@ -325,10 +364,12 @@ public class MainActivity extends AppCompatActivity {
                 this, android.R.layout.simple_spinner_item, estados);
         adapterEstados.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         dialogBinding.spinnerEstado.setAdapter(adapterEstados);
-        dialogBinding.spinnerEstado.setEnabled(pronostico != null);
+        dialogBinding.spinnerEstado.setEnabled(true);
         if (pronostico != null) {
             int index = Arrays.asList(estados).indexOf(pronostico.getEstado());
             dialogBinding.spinnerEstado.setSelection(Math.max(index, 0));
+        } else {
+            dialogBinding.spinnerEstado.setSelection(0);
         }
     }
 
@@ -403,9 +444,14 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        String estado = pronosticoExistente == null
-                ? PronosticoDto.ESTADO_PENDIENTE
-                : dialogBinding.spinnerEstado.getSelectedItem().toString();
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+        if (user == null) {
+            Toast.makeText(this, R.string.login_cancelado, Toast.LENGTH_SHORT).show();
+            iniciarLogin();
+            return;
+        }
+
+        String estado = dialogBinding.spinnerEstado.getSelectedItem().toString();
         PronosticoDto pronostico = new PronosticoDto(
                 seleccionA,
                 seleccionB,
@@ -417,30 +463,33 @@ public class MainActivity extends AppCompatActivity {
 
         if (pronosticoExistente == null) {
             pronosticosRef()
-                    .add(pronostico)
+                    .add(crearDataPronostico(pronostico))
                     .addOnSuccessListener(documentReference -> {
                         Toast.makeText(this, R.string.pronostico_registrado, Toast.LENGTH_SHORT).show();
                         dialog.dismiss();
                     })
                     .addOnFailureListener(e -> Toast.makeText(this, R.string.error_guardar, Toast.LENGTH_SHORT).show());
         } else {
-            Map<String, Object> data = new HashMap<>();
-            data.put("seleccionA", pronostico.getSeleccionA());
-            data.put("seleccionB", pronostico.getSeleccionB());
-            data.put("fechaPartido", pronostico.getFechaPartido());
-            data.put("golesA", pronostico.getGolesA());
-            data.put("golesB", pronostico.getGolesB());
-            data.put("estado", pronostico.getEstado());
-
             pronosticosRef()
                     .document(pronosticoExistente.getId())
-                    .update(data)
+                    .update(crearDataPronostico(pronostico))
                     .addOnSuccessListener(unused -> {
                         Toast.makeText(this, R.string.pronostico_actualizado, Toast.LENGTH_SHORT).show();
                         dialog.dismiss();
                     })
                     .addOnFailureListener(e -> Toast.makeText(this, R.string.error_guardar, Toast.LENGTH_SHORT).show());
         }
+    }
+
+    private Map<String, Object> crearDataPronostico(PronosticoDto pronostico) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("seleccionA", pronostico.getSeleccionA());
+        data.put("seleccionB", pronostico.getSeleccionB());
+        data.put("fechaPartido", pronostico.getFechaPartido());
+        data.put("golesA", pronostico.getGolesA());
+        data.put("golesB", pronostico.getGolesB());
+        data.put("estado", pronostico.getEstado());
+        return data;
     }
 
     private void confirmarEliminacion(PronosticoDto pronostico) {

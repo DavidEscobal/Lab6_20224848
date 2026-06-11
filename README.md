@@ -1,54 +1,109 @@
-# LAB6_20224848 - Firebase Authentication & Cloud Firestore
+# LAB6_20224848 - Firebase Authentication y Cloud Firestore
 
-Aplicacion Android Java para el **Sistema de Seguimiento del Mundial de Futbol** del Laboratorio 6.
+Aplicacion Android desarrollada en Java para el Laboratorio 6 de IoT. La app permite autenticar usuarios y gestionar pronosticos del Mundial usando Firebase Authentication y Cloud Firestore.
 
-## Metodos aplicados de las clases
+## Funcionalidades principales
 
-- Firebase Authentication: `FirebaseAuth.getInstance()`, `getCurrentUser()`, `getUid()`, `AuthUI.signOut()`.
-- FirebaseUI Auth: `createSignInIntentBuilder()`, `EmailBuilder`, `GoogleBuilder`, `GitHubBuilder`, `AuthMethodPickerLayout`.
-- Cloud Firestore: `FirebaseFirestore.getInstance()`, `collection()`, `document()`, `add()`, `update()`, `delete()`, `addSnapshotListener()`, `toObject()`, `getId()`.
-- NoSQL: datos organizados como coleccion/documento bajo `usuarios/{uid}/pronosticos/{pronosticoId}`.
+- Inicio de sesion con correo, Google y GitHub mediante FirebaseUI Auth.
+- Registro automatico del usuario autenticado en Firestore.
+- CRUD de pronosticos por usuario.
+- Lista de pronosticos en tiempo real con `addSnapshotListener()`.
+- Edicion y eliminacion controladas segun el estado del pronostico.
+- Estados disponibles: `Pendiente`, `Acertado` y `Fallado`.
+- Estadisticas en tiempo real: total, acertados, fallados y pendientes.
+- Reglas de Firestore para que cada usuario solo acceda a sus propios datos.
 
-## Configuracion Firebase
+## Tecnologias utilizadas
 
-1. Crea un proyecto en Firebase Console.
-2. Registra una app Android con package name:
+- Android Java
+- Gradle
+- View Binding
+- Material Components
+- Firebase Authentication
+- FirebaseUI Auth
+- Cloud Firestore
+- Firestore Security Rules
 
-   ```text
-   edu.pucp.lab6
-   ```
+## Estructura de datos en Firestore
 
-3. Descarga `google-services.json` y colocalo en:
+```text
+usuarios/{uid}
+usuarios/{uid}/pronosticos/{pronosticoId}
+```
+
+Cada pronostico guarda:
+
+- `seleccionA`
+- `seleccionB`
+- `fechaPartido`
+- `golesA`
+- `golesB`
+- `estado`
+
+## Configuracion de Firebase
+
+La app Android esta configurada con el package:
+
+```text
+edu.pucp.lab6
+```
+
+Para ejecutar el proyecto en otra maquina:
+
+1. Crear o usar un proyecto en Firebase Console.
+2. Registrar una app Android con el package `edu.pucp.lab6`.
+3. Agregar el SHA-1 del certificado debug o release que se vaya a usar.
+4. Descargar `google-services.json`.
+5. Colocar el archivo en:
 
    ```text
    app/google-services.json
    ```
 
-4. Activa Authentication con:
+6. Activar los proveedores de Authentication:
    - Email/Password
    - Google
    - GitHub
 
-5. Para GitHub, crea una OAuth App en GitHub y registra el Client ID/Secret en Firebase Authentication.
-6. Crea Cloud Firestore y publica las reglas de `firestore.rules`.
+7. Publicar las reglas de Firestore:
 
-## Funcionalidades
+   ```powershell
+   firebase deploy --only firestore:rules --project <project-id>
+   ```
 
-- Inicio de sesion personalizado con correo, Google y GitHub.
-- Registro automatico de usuarios autenticados en `usuarios/{uid}`.
-- CRUD de pronosticos en tiempo real.
-- Edicion y eliminacion solo cuando el estado es `Pendiente`.
-- Bloqueo automatico cuando el estado cambia a `Acertado` o `Fallado`.
-- Estadisticas en tiempo real: total, acertados, fallados y pendientes.
+## Reglas de Firestore
 
-## Pruebas recomendadas
+Las reglas del proyecto se encuentran en:
 
-- Crear cuenta por correo y validar el usuario en Firebase Auth.
-- Iniciar sesion con Google y GitHub.
-- Registrar un pronostico valido y verificarlo en Firestore.
-- Intentar registrar selecciones iguales.
-- Editar un pronostico pendiente.
-- Cambiar estado a `Acertado` o `Fallado` y confirmar que queda bloqueado.
-- Eliminar un pronostico pendiente con confirmacion.
-- Abrir Estadisticas y confirmar actualizacion automatica.
-- Probar con dos usuarios para confirmar separacion por `uid`.
+```text
+firestore.rules
+```
+
+Permiten que un usuario autenticado lea y escriba solamente en su documento:
+
+```text
+usuarios/{uid}/pronosticos/{pronosticoId}
+```
+
+## Compilacion
+
+Para generar el APK debug:
+
+```powershell
+.\gradlew.bat assembleDebug
+```
+
+El APK se genera en:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+## Pruebas realizadas
+
+- Login con Google.
+- Validacion de SHA-1 para Google Sign-In.
+- Registro de pronosticos en Firestore.
+- Lectura en tiempo real de pronosticos.
+- Despliegue de reglas de Firestore.
+- Generacion de APK debug compatible con Android 11.
