@@ -24,14 +24,53 @@
         android:textSize="24sp"
         android:textStyle="bold" />
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/buttonEmail"
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/layoutEmailAuth"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="28dp"
-        android:text="@string/login_email"
-        app:icon="@drawable/ic_email"
-        app:iconGravity="textStart" />
+        android:hint="@string/correo_electronico">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/editEmailAuth"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textEmailAddress"
+            android:singleLine="true" />
+
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/layoutPasswordAuth"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:hint="@string/contrasena"
+        app:endIconMode="password_toggle">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/editPasswordAuth"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textPassword"
+            android:singleLine="true" />
+
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/buttonLoginEmail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:text="@string/iniciar_sesion" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/buttonRegisterEmail"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/registrarse" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/buttonGoogle"

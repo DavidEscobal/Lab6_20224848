@@ -24,6 +24,13 @@
     <string name="fallados">Pronósticos fallados</string>
     <string name="pendientes">Pronósticos pendientes</string>
     <string name="login_email">Ingresar con correo</string>
+    <string name="correo_electronico">Correo electrónico</string>
+    <string name="contrasena">Contraseña</string>
+    <string name="iniciar_sesion">Iniciar sesión</string>
+    <string name="registrarse">Registrarse</string>
+    <string name="crear_cuenta">Crear cuenta</string>
+    <string name="confirmar_contrasena">Confirmar contraseña</string>
+    <string name="registro_exitoso">Usuario registrado correctamente.</string>
     <string name="login_google">Ingresar con Google</string>
     <string name="login_github">Ingresar con GitHub</string>
     <string name="login_cancelado">Inicio de sesión cancelado.</string>
@@ -33,6 +40,10 @@
     <string name="pronostico_eliminado">Pronóstico eliminado correctamente.</string>
     <string name="pronostico_bloqueado">Solo se pueden modificar pronósticos pendientes.</string>
     <string name="validacion_campos">Completa todos los campos.</string>
+    <string name="validacion_correo_contrasena">Ingresa correo y contraseña.</string>
+    <string name="validacion_contrasena_minima">La contraseña debe tener al menos 6 caracteres.</string>
+    <string name="validacion_contrasenas_no_coinciden">Las contraseñas no coinciden.</string>
+    <string name="error_cuenta_existente_otro_proveedor">Ya existe una cuenta con ese correo usando otro método. Inicia sesión con Google o con correo y contraseña.</string>
     <string name="validacion_selecciones">Las selecciones no pueden ser iguales.</string>
     <string name="validacion_goles">Los goles deben ser enteros no negativos.</string>
     <string name="error_guardar">No se pudo guardar el pronóstico.</string>

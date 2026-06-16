@@ -4,6 +4,7 @@ import android.app.DatePickerDialog;
 import android.content.Intent;
 import android.content.res.Resources;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -16,19 +17,24 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
-import com.firebase.ui.auth.AuthMethodPickerLayout;
 import com.firebase.ui.auth.AuthUI;
 import com.firebase.ui.auth.FirebaseAuthUIActivityResultContract;
+import com.firebase.ui.auth.IdpResponse;
 import com.firebase.ui.auth.data.model.FirebaseAuthUIAuthenticationResult;
 import com.google.firebase.FirebaseApp;
+import com.google.firebase.auth.AuthResult;
+import com.google.firebase.auth.FirebaseAuthUserCollisionException;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.auth.OAuthProvider;
 import com.google.firebase.firestore.CollectionReference;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.firebase.firestore.SetOptions;
+import com.google.android.gms.tasks.Task;
+import com.google.android.material.textfield.TextInputEditText;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -44,6 +50,7 @@ import edu.pucp.lab6.databinding.ActivityMainBinding;
 import edu.pucp.lab6.databinding.DialogPronosticoBinding;
 
 public class MainActivity extends AppCompatActivity {
+    private static final String TAG = "MainActivity";
     private static final String DATE_PATTERN = "yyyy-MM-dd";
 
     private ActivityMainBinding binding;
@@ -51,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
     private FirebaseFirestore db;
     private ListenerRegistration pronosticosListener;
     private PronosticoAdapter adapter;
+    private AlertDialog loginDialog;
     private final SimpleDateFormat firestoreDateFormat =
             new SimpleDateFormat(DATE_PATTERN, Locale.US);
 
@@ -130,6 +138,8 @@ public class MainActivity extends AppCompatActivity {
         FirebaseUser user = firebaseAuth.getCurrentUser();
         if (user != null && pronosticosListener == null) {
             escucharPronosticos();
+        } else if (user == null) {
+            revisarResultadoGithubPendiente();
         }
     }
 
@@ -158,36 +168,207 @@ public class MainActivity extends AppCompatActivity {
 
     private void iniciarLogin() {
         binding.buttonNuevoPronostico.setEnabled(false);
+        if (loginDialog != null && loginDialog.isShowing()) {
+            return;
+        }
+
         boolean googleConfigurado = googleSignInEstaConfigurado();
         int layoutLogin = googleConfigurado
                 ? R.layout.auth_method_picker
                 : R.layout.auth_method_picker_sin_google;
+        View loginView = LayoutInflater.from(this).inflate(layoutLogin, null, false);
 
-        AuthMethodPickerLayout.Builder layoutBuilder = new AuthMethodPickerLayout.Builder(layoutLogin)
-                .setEmailButtonId(R.id.buttonEmail)
-                .setGithubButtonId(R.id.buttonGithub);
+        loginDialog = new AlertDialog.Builder(this)
+                .setView(loginView)
+                .setCancelable(false)
+                .create();
 
-        List<AuthUI.IdpConfig> providers = new ArrayList<>();
-        providers.add(new AuthUI.IdpConfig.EmailBuilder().build());
+        TextInputEditText editEmail = loginView.findViewById(R.id.editEmailAuth);
+        TextInputEditText editPassword = loginView.findViewById(R.id.editPasswordAuth);
+        loginView.findViewById(R.id.buttonLoginEmail)
+                .setOnClickListener(view -> iniciarSesionCorreo(editEmail, editPassword));
+        loginView.findViewById(R.id.buttonRegisterEmail)
+                .setOnClickListener(view -> mostrarFormularioRegistro());
+
         if (googleConfigurado) {
-            layoutBuilder.setGoogleButtonId(R.id.buttonGoogle);
-            providers.add(new AuthUI.IdpConfig.GoogleBuilder().build());
+            loginView.findViewById(R.id.buttonGoogle).setOnClickListener(view -> {
+                cerrarDialogoLogin();
+                iniciarLoginFirebaseUi(new AuthUI.IdpConfig.GoogleBuilder().build());
+            });
         } else {
             Toast.makeText(this, R.string.google_no_configurado, Toast.LENGTH_LONG).show();
         }
-        providers.add(new AuthUI.IdpConfig.GitHubBuilder().build());
+        loginView.findViewById(R.id.buttonGithub).setOnClickListener(view -> {
+            cerrarDialogoLogin();
+            iniciarLoginGithub();
+        });
 
-        AuthMethodPickerLayout customLayout = layoutBuilder.build();
+        loginDialog.show();
+    }
 
+    private void iniciarSesionCorreo(TextInputEditText editEmail, TextInputEditText editPassword) {
+        Credenciales credenciales = leerCredenciales(editEmail, editPassword);
+        if (credenciales == null) {
+            return;
+        }
+        firebaseAuth.signInWithEmailAndPassword(credenciales.correo, credenciales.contrasena)
+                .addOnSuccessListener(authResult -> {
+                    FirebaseUser user = authResult.getUser();
+                    if (user != null) {
+                        configurarSesionActiva(user);
+                    }
+                })
+                .addOnFailureListener(error -> {
+                    Log.w(TAG, "No se pudo iniciar sesion con correo", error);
+                    Toast.makeText(this, mensajeErrorLogin(error), Toast.LENGTH_LONG).show();
+                });
+    }
+
+    private void mostrarFormularioRegistro() {
+        View registroView = LayoutInflater.from(this).inflate(R.layout.dialog_registro, null, false);
+        TextInputEditText editEmail = registroView.findViewById(R.id.editEmailRegistro);
+        TextInputEditText editPassword = registroView.findViewById(R.id.editPasswordRegistro);
+        TextInputEditText editConfirmPassword = registroView.findViewById(R.id.editConfirmPasswordRegistro);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.registrarse)
+                .setView(registroView)
+                .setNegativeButton(R.string.cancelar, null)
+                .setPositiveButton(R.string.crear_cuenta, null)
+                .create();
+        dialog.setOnShowListener(dialogInterface -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(view -> registrarCorreo(dialog, editEmail, editPassword, editConfirmPassword)));
+        dialog.show();
+    }
+
+    private void registrarCorreo(AlertDialog dialog,
+                                 TextInputEditText editEmail,
+                                 TextInputEditText editPassword,
+                                 TextInputEditText editConfirmPassword) {
+        Credenciales credenciales = leerCredenciales(editEmail, editPassword);
+        if (credenciales == null) {
+            return;
+        }
+        String confirmacion = textoCampo(editConfirmPassword);
+        if (!credenciales.contrasena.equals(confirmacion)) {
+            Toast.makeText(this, R.string.validacion_contrasenas_no_coinciden, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        firebaseAuth.createUserWithEmailAndPassword(credenciales.correo, credenciales.contrasena)
+                .addOnSuccessListener(authResult -> {
+                    FirebaseUser user = authResult.getUser();
+                    if (user != null) {
+                        Toast.makeText(this, R.string.registro_exitoso, Toast.LENGTH_SHORT).show();
+                        dialog.dismiss();
+                        configurarSesionActiva(user);
+                    }
+                })
+                .addOnFailureListener(error -> {
+                    Log.w(TAG, "No se pudo registrar usuario con correo", error);
+                    Toast.makeText(this, mensajeErrorLogin(error), Toast.LENGTH_LONG).show();
+                });
+    }
+
+    @Nullable
+    private Credenciales leerCredenciales(TextInputEditText editEmail, TextInputEditText editPassword) {
+        String correo = textoCampo(editEmail);
+        String contrasena = textoCampo(editPassword);
+        if (correo.isEmpty() || contrasena.isEmpty()) {
+            Toast.makeText(this, R.string.validacion_correo_contrasena, Toast.LENGTH_SHORT).show();
+            return null;
+        }
+        if (contrasena.length() < 6) {
+            Toast.makeText(this, R.string.validacion_contrasena_minima, Toast.LENGTH_SHORT).show();
+            return null;
+        }
+        return new Credenciales(correo, contrasena);
+    }
+
+    private String textoCampo(TextInputEditText campo) {
+        return campo.getText() == null ? "" : campo.getText().toString().trim();
+    }
+
+    private static class Credenciales {
+        final String correo;
+        final String contrasena;
+
+        Credenciales(String correo, String contrasena) {
+            this.correo = correo;
+            this.contrasena = contrasena;
+        }
+    }
+
+    private void cerrarDialogoLogin() {
+        if (loginDialog != null && loginDialog.isShowing()) {
+            loginDialog.dismiss();
+        }
+        loginDialog = null;
+    }
+
+    private void iniciarLoginFirebaseUi(AuthUI.IdpConfig provider) {
         Intent intent = AuthUI.getInstance()
                 .createSignInIntentBuilder()
-                .setAvailableProviders(providers)
-                .setAuthMethodPickerLayout(customLayout)
+                .setAvailableProviders(Arrays.asList(provider))
                 .setLogo(R.drawable.ic_world_cup)
                 .setTheme(R.style.Theme_Lab6)
                 .setIsSmartLockEnabled(false)
                 .build();
         signInLauncher.launch(intent);
+    }
+
+    private void iniciarLoginGithub() {
+        Task<AuthResult> pendingResultTask = firebaseAuth.getPendingAuthResult();
+        if (pendingResultTask != null) {
+            procesarResultadoGithub(pendingResultTask);
+            return;
+        }
+
+        OAuthProvider.Builder provider = OAuthProvider.newBuilder("github.com");
+        provider.setScopes(Arrays.asList("user:email"));
+        procesarResultadoGithub(firebaseAuth.startActivityForSignInWithProvider(this, provider.build()));
+    }
+
+    private void revisarResultadoGithubPendiente() {
+        Task<AuthResult> pendingResultTask = firebaseAuth.getPendingAuthResult();
+        if (pendingResultTask != null) {
+            procesarResultadoGithub(pendingResultTask);
+        }
+    }
+
+    private void procesarResultadoGithub(Task<AuthResult> authTask) {
+        authTask
+                .addOnSuccessListener(authResult -> {
+                    FirebaseUser user = authResult.getUser();
+                    if (user != null) {
+                        configurarSesionActiva(user);
+                    } else {
+                        iniciarLogin();
+                    }
+                })
+                .addOnFailureListener(error -> {
+                    Log.w(TAG, "No se pudo iniciar sesion con GitHub", error);
+                    Toast.makeText(this, mensajeErrorLoginGithub(error), Toast.LENGTH_LONG).show();
+                    iniciarLogin();
+                });
+    }
+
+    private String mensajeErrorLoginGithub(Exception error) {
+        if (error instanceof FirebaseAuthUserCollisionException) {
+            return getString(R.string.error_cuenta_existente_otro_proveedor);
+        }
+        String mensaje = error.getMessage();
+        if (mensaje != null && mensaje.contains("An account already exists with the same email address")) {
+            return getString(R.string.error_cuenta_existente_otro_proveedor);
+        }
+        return mensajeErrorLogin(error);
+    }
+
+    private String mensajeErrorLogin(Exception error) {
+        String mensaje = error.getMessage();
+        if (mensaje == null || mensaje.trim().isEmpty()) {
+            return getString(R.string.login_cancelado);
+        }
+        return mensaje;
     }
 
     private boolean googleSignInEstaConfigurado() {
@@ -219,12 +400,24 @@ public class MainActivity extends AppCompatActivity {
         if (result.getResultCode() == RESULT_OK) {
             iniciarLogin();
         } else {
-            Toast.makeText(this, R.string.login_cancelado, Toast.LENGTH_SHORT).show();
+            mostrarErrorLogin(result);
             iniciarLogin();
         }
     }
 
+    private void mostrarErrorLogin(FirebaseAuthUIAuthenticationResult result) {
+        IdpResponse response = result.getIdpResponse();
+        if (response != null && response.getError() != null) {
+            Exception error = response.getError();
+            Log.w(TAG, "No se pudo iniciar sesion", error);
+            Toast.makeText(this, mensajeErrorLogin(error), Toast.LENGTH_LONG).show();
+            return;
+        }
+        Toast.makeText(this, R.string.login_cancelado, Toast.LENGTH_SHORT).show();
+    }
+
     private void configurarSesionActiva(@NonNull FirebaseUser user) {
+        cerrarDialogoLogin();
         String correo = user.getEmail() == null ? user.getUid() : user.getEmail();
         binding.textUsuario.setText(correo);
         binding.buttonNuevoPronostico.setEnabled(true);
@@ -240,7 +433,8 @@ public class MainActivity extends AppCompatActivity {
         usuario.put("nombre", user.getDisplayName());
         db.collection("usuarios")
                 .document(user.getUid())
-                .set(usuario, SetOptions.merge());
+                .set(usuario, SetOptions.merge())
+                .addOnFailureListener(e -> Log.w(TAG, "No se pudo guardar el usuario", e));
     }
 
     private CollectionReference pronosticosRef() {
@@ -468,7 +662,7 @@ public class MainActivity extends AppCompatActivity {
                         Toast.makeText(this, R.string.pronostico_registrado, Toast.LENGTH_SHORT).show();
                         dialog.dismiss();
                     })
-                    .addOnFailureListener(e -> Toast.makeText(this, R.string.error_guardar, Toast.LENGTH_SHORT).show());
+                    .addOnFailureListener(this::mostrarErrorGuardarPronostico);
         } else {
             pronosticosRef()
                     .document(pronosticoExistente.getId())
@@ -477,8 +671,18 @@ public class MainActivity extends AppCompatActivity {
                         Toast.makeText(this, R.string.pronostico_actualizado, Toast.LENGTH_SHORT).show();
                         dialog.dismiss();
                     })
-                    .addOnFailureListener(e -> Toast.makeText(this, R.string.error_guardar, Toast.LENGTH_SHORT).show());
+                    .addOnFailureListener(this::mostrarErrorGuardarPronostico);
         }
+    }
+
+    private void mostrarErrorGuardarPronostico(Exception error) {
+        Log.w(TAG, "No se pudo guardar el pronostico", error);
+        String detalle = error.getMessage();
+        if (detalle == null || detalle.trim().isEmpty()) {
+            Toast.makeText(this, R.string.error_guardar, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Toast.makeText(this, getString(R.string.error_guardar) + " " + detalle, Toast.LENGTH_LONG).show();
     }
 
     private Map<String, Object> crearDataPronostico(PronosticoDto pronostico) {
@@ -546,6 +750,10 @@ public class MainActivity extends AppCompatActivity {
                         pronosticosListener = null;
                     }
                     adapter.submitList(new java.util.ArrayList<>());
+                    binding.textUsuario.setText("");
+                    binding.buttonNuevoPronostico.setEnabled(false);
+                    binding.textEstadoVacio.setVisibility(View.VISIBLE);
+                    binding.textEstadoVacio.setText(R.string.sin_pronosticos);
                     iniciarLogin();
                     Toast.makeText(this, R.string.logout_exitoso, Toast.LENGTH_SHORT).show();
                 });
